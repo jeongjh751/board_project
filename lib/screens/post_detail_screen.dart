@@ -4,8 +4,15 @@ import 'edit_post_screen.dart';
 
 class PostDetailScreen extends StatelessWidget {
   final Post post;
+  final String? token;
+  final String? currentUsername;
 
-  const PostDetailScreen({Key? key, required this.post}) : super(key: key);
+  const PostDetailScreen({
+    Key? key, 
+    required this.post,
+    this.token,
+    this.currentUsername,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -13,20 +20,25 @@ class PostDetailScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('게시글 상세'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () async {
-              final result = await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => EditPostScreen(post: post),
-                ),
-              );
-              if (result == true && context.mounted) {
-                Navigator.pop(context, true);
-              }
-            },
-          ),
+          // 본인 글일 때만 수정 버튼 표시
+          if (token != null && post.author == currentUsername)
+            IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => EditPostScreen(
+                      post: post,
+                      token: token!,
+                    ),
+                  ),
+                );
+                if (result == true && context.mounted) {
+                  Navigator.pop(context, true);
+                }
+              },
+            ),
         ],
       ),
       body: SingleChildScrollView(

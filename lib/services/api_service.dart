@@ -5,19 +5,31 @@ import '../models/post.dart';
 class ApiService {
   static const String baseUrl = 'http://localhost:3000/api';
 
-  static Future<List<Post>> getPosts() async {
-    try {
-      final response = await http.get(Uri.parse('$baseUrl/posts'));
-      
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        return data.map((json) => Post.fromJson(json)).toList();
-      } else {
-        throw Exception('게시글 로드 실패: ${response.statusCode}');
-      }
-    } catch (e) {
-      throw Exception('서버 연결 실패: $e');
+  static Future<Map<String, dynamic>> getPostsWithPagination({
+    int page = 1,
+    int limit = 10,
+  }) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/posts?page=$page&limit=$limit'),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return {
+        'posts': (data['posts'] as List)
+            .map((json) => Post.fromJson(json))
+            .toList(),
+        'pagination': data['pagination'],
+      };
+    } else {
+      throw Exception('게시글 목록을 불러오는데 실패했습니다');
     }
+  }
+
+  // 기존 메서드도 유지 (호환성)
+  static Future<List<Post>> getPosts() async {
+    final result = await getPostsWithPagination(page: 1, limit: 100);
+    return result['posts'];
   }
 
   static Future<void> createPost(String title, String content, String author) async {
@@ -40,36 +52,41 @@ class ApiService {
     }
   }
   
-  static Future<void> updatePost(int id, String title, String content) async {
-    try {
-      final response = await http.put(
-        Uri.parse('$baseUrl/posts/$id'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'title': title,
-          'content': content,
-        }),
-      );
+  // 게시글 수정 (토큰 필요)
+  static Future<void> updatePost(
+    int id,
+    String title,
+    String content,
+    String token, // 토큰 추가
+  ) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/posts/$id'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token', // 토큰 헤더 추가
+      },
+      body: jsonEncode({
+        'title': title,
+        'content': content,
+      }),
+    );
 
-      if (response.statusCode != 200) {
-        throw Exception('게시글 수정 실패');
-      }
-    } catch (e) {
-      throw Exception('서버 연결 실패: $e');
+    if (response.statusCode != 200) {
+      throw Exception(jsonDecode(response.body)['error'] ?? '게시글 수정 실패');
     }
   }
 
-  static Future<void> deletePost(int id) async {
-    try {
-      final response = await http.delete(
-        Uri.parse('$baseUrl/posts/$id'),
-      );
+  // 게시글 삭제 (토큰 필요)
+  static Future<void> deletePost(int id, String token) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/posts/$id'),
+      headers: {
+        'Authorization': 'Bearer $token',
+      },
+    );
 
-      if (response.statusCode != 200) {
-        throw Exception('게시글 삭제 실패');
-      }
-    } catch (e) {
-      throw Exception('서버 연결 실패: $e');
+    if (response.statusCode != 200) {
+      throw Exception('삭제 실패');
     }
   }
 

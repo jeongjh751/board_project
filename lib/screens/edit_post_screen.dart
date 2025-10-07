@@ -4,8 +4,13 @@ import '../services/api_service.dart';
 
 class EditPostScreen extends StatefulWidget {
   final Post post;
-
-  const EditPostScreen({Key? key, required this.post}) : super(key: key);
+  final String token; // 토큰 추가
+  
+  const EditPostScreen({
+    Key? key, 
+    required this.post,
+    required this.token, // 토큰 필수
+  }) : super(key: key);
 
   @override
   State<EditPostScreen> createState() => _EditPostScreenState();
@@ -40,6 +45,7 @@ class _EditPostScreenState extends State<EditPostScreen> {
           widget.post.id,
           _titleController.text,
           _contentController.text,
+          widget.token, // 토큰 전달
         );
 
         if (mounted) {
@@ -73,17 +79,6 @@ class _EditPostScreenState extends State<EditPostScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // 작성자는 수정 불가 (읽기 전용)
-            TextFormField(
-              initialValue: widget.post.author,
-              decoration: const InputDecoration(
-                labelText: '작성자',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.person),
-              ),
-              enabled: false,
-            ),
-            const SizedBox(height: 16),
             TextFormField(
               controller: _titleController,
               decoration: const InputDecoration(

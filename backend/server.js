@@ -15,19 +15,43 @@ app.use(bodyParser.json());
 // 인증 라우트
 app.use('/api/auth', authRoutes);
 
-// 게시글 목록 조회 (인증 필요 없음)
+// 게시글 목록 조회 (페이지네이션 추가)
 app.get('/api/posts', async (req, res) => {
   try {
-    console.log('게시글 조회 요청...');
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    console.log(`게시글 조회 요청... (페이지: ${page}, 개수: ${limit})`);
+
+    // 전체 게시글 수 조회  
+    const countResult = await pool.query('SELECT COUNT(*) FROM posts');
+    const totalPosts = parseInt(countResult.rows[0].count);
+    const totalPages = Math.ceil(totalPosts / limit);
+
+    // 페이지별 게시글 조회
     const result = await pool.query(
       `SELECT id, title, content, author, 
               TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at 
        FROM posts 
-       ORDER BY created_at DESC`
+       ORDER BY created_at DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
     );
     
-    console.log(`${result.rows.length}개의 게시글 조회 완료`);
-    res.json(result.rows);
+    console.log(`${result.rows.length}개의 게시글 조회 완료 (전체: ${totalPosts})`);
+    
+    res.json({
+      posts: result.rows,
+      pagination: {
+        currentPage: page,
+        totalPages: totalPages,
+        totalPosts: totalPosts,
+        postsPerPage: limit,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1
+      }
+    });
   } catch (err) {
     console.error('조회 오류:', err.message);
     res.status(500).json({ 
@@ -69,25 +93,37 @@ app.post('/api/posts', authMiddleware, async (req, res) => {
   }
 });
 
-// 게시글 수정 (인증 필요)
+// 게시글 수정 (본인만 가능)
 app.put('/api/posts/:id', authMiddleware, async (req, res) => {
   try {
     const { title, content } = req.body;
     const { id } = req.params;
+    const username = req.user.username; // 토큰에서 가져온 사용자명
     
     if (!title || !content) {
       return res.status(400).json({ error: '제목과 내용을 입력하세요' });
     }
     
-    console.log(`게시글 수정 요청, ID: ${id}`);
+    // 게시글 작성자 확인
+    const postCheck = await pool.query(
+      'SELECT author FROM posts WHERE id = $1',
+      [id]
+    );
+    
+    if (postCheck.rows.length === 0) {
+      return res.status(404).json({ error: '게시글을 찾을 수 없습니다' });
+    }
+    
+    // 작성자와 현재 사용자가 같은지 확인
+    if (postCheck.rows[0].author !== username) {
+      return res.status(403).json({ error: '자신의 게시글만 수정할 수 있습니다' });
+    }
+    
+    console.log(`게시글 수정 요청, ID: ${id}, 작성자: ${username}`);
     const result = await pool.query(
       'UPDATE posts SET title = $1, content = $2 WHERE id = $3 RETURNING *',
       [title, content, id]
     );
-    
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error: '게시글을 찾을 수 없습니다' });
-    }
     
     console.log('게시글 수정 완료');
     res.json({ 
@@ -103,18 +139,29 @@ app.put('/api/posts/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// 게시글 삭제 (인증 필요)
+// 게시글 삭제 (본인만 가능)
 app.delete('/api/posts/:id', authMiddleware, async (req, res) => {
   try {
-    console.log(`게시글 삭제 요청, ID: ${req.params.id}`);
-    const result = await pool.query(
-      'DELETE FROM posts WHERE id = $1',
-      [req.params.id]
+    const { id } = req.params;
+    const username = req.user.username; // 토큰에서 가져온 사용자명
+    
+    // 게시글 작성자 확인
+    const postCheck = await pool.query(
+      'SELECT author FROM posts WHERE id = $1',
+      [id]
     );
     
-    if (result.rowCount === 0) {
+    if (postCheck.rows.length === 0) {
       return res.status(404).json({ error: '게시글을 찾을 수 없습니다' });
     }
+    
+    // 작성자와 현재 사용자가 같은지 확인
+    if (postCheck.rows[0].author !== username) {
+      return res.status(403).json({ error: '자신의 게시글만 삭제할 수 있습니다' });
+    }
+    
+    console.log(`게시글 삭제 요청, ID: ${id}, 작성자: ${username}`);
+    await pool.query('DELETE FROM posts WHERE id = $1', [id]);
     
     console.log('게시글 삭제 완료');
     res.json({ message: '게시글이 삭제되었습니다' });
